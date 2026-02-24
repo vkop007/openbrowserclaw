@@ -33,7 +33,7 @@ const PROMPT_STARTERS = [
     {
         icon: Globe,
         title: 'Latest news',
-        prompt: 'Get me the top trending posts from HackerNews and summarize them in a slide deck using revealjs.',
+        prompt: 'Get me the top trending posts from HackerNews.',
     },
     {
         icon: LineGraphIcon,
