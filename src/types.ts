@@ -105,6 +105,8 @@ export interface TokenUsage {
   groupId: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
   contextLimit: number;
 }
 

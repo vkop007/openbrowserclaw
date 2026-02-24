@@ -139,9 +139,10 @@ export class ChatUI {
     if (usage.groupId !== this.activeGroupId) return;
     if (!this.contextBarEl || !this.contextFillEl || !this.contextLabelEl) return;
 
-    const totalUsed = usage.inputTokens + usage.outputTokens;
+    // Only non-cached input tokens count against the rate limit
+    const rateLimitedTokens = usage.inputTokens;
     const limit = usage.contextLimit;
-    const pct = Math.min((totalUsed / limit) * 100, 100);
+    const pct = Math.min((rateLimitedTokens / limit) * 100, 100);
 
     this.contextFillEl.style.width = `${pct}%`;
 
@@ -155,9 +156,13 @@ export class ChatUI {
       this.contextFillEl.classList.add('context-fill-ok');
     }
 
-    const usedK = (totalUsed / 1000).toFixed(1);
+    const usedK = (rateLimitedTokens / 1000).toFixed(1);
     const limitK = (limit / 1000).toFixed(0);
-    this.contextLabelEl.textContent = `${usedK}k / ${limitK}k tokens (${pct.toFixed(0)}%)`;
+    const cachedK = (usage.cacheReadTokens / 1000).toFixed(1);
+    const label = usage.cacheReadTokens > 0
+      ? `${usedK}k / ${limitK}k tokens (${pct.toFixed(0)}%) · ${cachedK}k cached`
+      : `${usedK}k / ${limitK}k tokens (${pct.toFixed(0)}%)`;
+    this.contextLabelEl.textContent = label;
     this.contextBarEl.style.display = 'flex';
   }
 

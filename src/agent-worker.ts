@@ -59,6 +59,7 @@ async function handleInvoke(payload: InvokePayload): Promise<void> {
       const body = {
         model,
         max_tokens: maxTokens,
+        cache_control: { type: 'ephemeral' },
         system: systemPrompt,
         messages: currentMessages,
         tools: TOOL_DEFINITIONS,
@@ -92,6 +93,8 @@ async function handleInvoke(payload: InvokePayload): Promise<void> {
             groupId,
             inputTokens: result.usage.input_tokens || 0,
             outputTokens: result.usage.output_tokens || 0,
+            cacheReadTokens: result.usage.cache_read_input_tokens || 0,
+            cacheCreationTokens: result.usage.cache_creation_input_tokens || 0,
             contextLimit: getContextLimit(model),
           },
         });
@@ -208,6 +211,7 @@ async function handleCompact(payload: CompactPayload): Promise<void> {
     const body = {
       model,
       max_tokens: Math.min(maxTokens, 4096),
+      cache_control: { type: 'ephemeral' },
       system: compactSystemPrompt,
       messages: compactMessages,
     };
@@ -286,9 +290,17 @@ async function executeTool(
           headers: input.headers as Record<string, string> | undefined,
           body: input.body as string | undefined,
         });
-        const text = await fetchRes.text();
+        const rawText = await fetchRes.text();
+        const contentType = fetchRes.headers.get('content-type') || '';
         const status = `[HTTP ${fetchRes.status}]\n`;
-        return status + text.slice(0, FETCH_MAX_RESPONSE);
+
+        // Strip HTML to reduce token usage
+        let body = rawText;
+        if (contentType.includes('html') || rawText.trimStart().startsWith('<')) {
+          body = stripHtml(rawText);
+        }
+
+        return status + body.slice(0, FETCH_MAX_RESPONSE);
       }
 
       case 'update_memory':
@@ -346,12 +358,35 @@ function post(message: WorkerOutbound): void {
   (self as unknown as Worker).postMessage(message);
 }
 
+/**
+ * Extract readable text from HTML, stripping tags, scripts, styles, and
+ * collapsing whitespace.  Runs in the worker (no DOM), so we use regex.
+ */
+function stripHtml(html: string): string {
+  let text = html;
+  // Remove script/style/noscript blocks entirely
+  text = text.replace(/<(script|style|noscript|svg|head)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  // Remove HTML comments
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+  // Remove all tags
+  text = text.replace(/<[^>]+>/g, ' ');
+  // Decode common HTML entities
+  text = text.replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#\d+;/g, '');
+  // Collapse whitespace
+  text = text.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
+  return text;
+}
+
 /** Map model names to their context window limits (tokens). */
 function getContextLimit(_model: string): number {
-  // Use the org rate limit (input tokens per minute) rather than the
-  // model’s theoretical context window so the bar reflects the real
-  // constraint the user will hit first.
-  return 30_000;
+  // The actual session context window — 200k tokens for Claude Sonnet/Opus.
+  return 200_000;
 }
 
 function log(

@@ -44,7 +44,7 @@ export const SCHEDULER_INTERVAL = 60_000;
 export const PROCESS_LOOP_INTERVAL = 100;
 
 /** Fetch tool response truncation limit */
-export const FETCH_MAX_RESPONSE = 100_000;
+export const FETCH_MAX_RESPONSE = 20_000;
 
 /** IndexedDB database name */
 export const DB_NAME = 'openbrowserclaw';
